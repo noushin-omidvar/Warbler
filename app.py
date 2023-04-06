@@ -54,6 +54,20 @@ def do_logout():
         del session[CURR_USER_KEY]
 
 
+def update(user, form):
+    """Update user info"""
+
+    try:
+        user.username = form.username.data
+        user.email = form.email.data
+        user.image_url = form.image_url.data or User.image_url.default.arg
+
+        db.session.commit()
+
+    except IntegrityError:
+        flash("Username already taken", 'danger')
+
+
 @app.route('/signup', methods=["GET", "POST"])
 def signup():
     """Handle user signup.
@@ -142,7 +156,6 @@ def list_users():
 @app.route('/users/<int:user_id>')
 def users_show(user_id):
     """Show user profile."""
-
     user = User.query.get_or_404(user_id)
 
     # snagging messages in order from the database;
@@ -213,11 +226,30 @@ def stop_following(follow_id):
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
+    print(g.user.username)
+    print('****', session[CURR_USER_KEY])
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
 
-    # IMPLEMENT THIS
+    form = UserAddForm()
+
+    if form.validate_on_submit():
+        user = User.authenticate(g.user.username,
+                                 form.password.data)
+        if user:
+            update(user, form)
+            flash(f"Your information is updated!", "success")
+            return redirect(f"/users/{g.user.id}")
+
+        flash("Invalid credentials.", 'danger')
+
+    form.username.data = g.user.username
+    form.email.data = g.user.email
+    return render_template('users/edit.html', form=form)
 
 
-@app.route('/users/delete', methods=["POST"])
+@ app.route('/users/delete', methods=["POST"])
 def delete_user():
     """Delete user."""
 
@@ -236,7 +268,7 @@ def delete_user():
 ##############################################################################
 # Messages routes:
 
-@app.route('/messages/new', methods=["GET", "POST"])
+@ app.route('/messages/new', methods=["GET", "POST"])
 def messages_add():
     """Add a message:
 
@@ -259,7 +291,7 @@ def messages_add():
     return render_template('messages/new.html', form=form)
 
 
-@app.route('/messages/<int:message_id>', methods=["GET"])
+@ app.route('/messages/<int:message_id>', methods=["GET"])
 def messages_show(message_id):
     """Show a message."""
 
@@ -267,7 +299,7 @@ def messages_show(message_id):
     return render_template('messages/show.html', message=msg)
 
 
-@app.route('/messages/<int:message_id>/delete', methods=["POST"])
+@ app.route('/messages/<int:message_id>/delete', methods=["POST"])
 def messages_destroy(message_id):
     """Delete a message."""
 
@@ -286,7 +318,7 @@ def messages_destroy(message_id):
 # Homepage and error pages
 
 
-@app.route('/')
+@ app.route('/')
 def homepage():
     """Show homepage:
 
@@ -314,7 +346,7 @@ def homepage():
 #
 # https://stackoverflow.com/questions/34066804/disabling-caching-in-flask
 
-@app.after_request
+@ app.after_request
 def add_header(req):
     """Add non-caching headers on every request."""
 
