@@ -169,6 +169,19 @@ def users_show(user_id):
     return render_template('users/show.html', user=user, messages=messages)
 
 
+@app.route('/users/<int:user_id>/likes')
+def show_liked_msgs(user_id):
+    """Show list of posts this user has liked."""
+
+    user = User.query.get_or_404(user_id)
+
+    # snagging messages in order from the database;
+    # user.messages won't be in order by default
+    liked_messages = user.likes
+    print(liked_messages)
+    return render_template('users/likes.html', user=user, liked_messages=liked_messages)
+
+
 @app.route('/users/<int:user_id>/following')
 def show_following(user_id):
     """Show list of people this user is following."""
@@ -226,8 +239,7 @@ def stop_following(follow_id):
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
     """Update profile for current user."""
-    print(g.user.username)
-    print('****', session[CURR_USER_KEY])
+
     if not g.user:
         flash("Access unauthorized.", "danger")
         return redirect("/")
@@ -265,8 +277,30 @@ def delete_user():
     return redirect("/signup")
 
 
+@app.route('/users/add_like/<int:message_id>', methods=['POST'])
+def add_like(message_id):
+    """Add like"""
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    liked_msgs_ids = [like.id for like in g.user.likes]
+
+    if message_id in liked_msgs_ids:
+        unlike = Likes.query.filter_by(
+            message_id=message_id, user_id=g.user.id).first()
+        db.session.delete(unlike)
+    else:
+        like = Likes(user_id=g.user.id, message_id=message_id)
+        db.session.add(like)
+
+    db.session.commit()
+
+    return redirect("/")
+
 ##############################################################################
 # Messages routes:
+
 
 @ app.route('/messages/new', methods=["GET", "POST"])
 def messages_add():
@@ -333,9 +367,10 @@ def homepage():
                     .order_by(Message.timestamp.desc())
                     .limit(100)
                     .all())
-        print(g.user.following)
-        print(messages[1].user)
-        return render_template('home.html', messages=messages)
+
+        likes = [like.id for like in g.user.likes]
+
+        return render_template('home.html', messages=messages, likes=likes)
 
     else:
         return render_template('home-anon.html')
